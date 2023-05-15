@@ -12,16 +12,16 @@ Ce dépôt inclu notre code source final pour mictcp
 La méthode pour choisir la version que nous recommandons est d'utiliser le script `configurer.sh`, assurez-vous de le rendre exécutable par la commande :
 `chmod +x configurer.sh`. Il ne fait que modifier une variable `version` qui contrôle la version dans `src/mictcp.c`.  
 
-Le cas échéant, vous pouvez toujours remonter aux commits taggés avec le nom de la version approprié. 
+Le cas échéant, vous pouvez toujours remonter aux commits taggés avec le nom de la version appropriée. 
 
 ## Compiler
 Si vous avez utilisé le script pour choisir la version, il n'est pas nécessaire de recompiler, sinon veuillez exécuter `make`
 
 ## Exécution
-Pour exécuter, veuillez lancer simplement `tsock_text` ou `tsock_video`, faites cependant attention au bug décrit plus bas.
+Pour exécuter, veuillez lancer simplement `tsock_text` ou `tsock_video`, faites cependant attention au bug décrit plus en bas.
 
 ## Notre avancement
-Nous sommes arrivés àjusqu'à développé une version fonctionnelle de la v4, (i.e avec fiabilité partielle et établissement de la connexion).
+Nous sommes arrivés jusqu'à développé une version fonctionnelle de la v4, (i.e avec fiabilité partielle et établissement de la connexion).
 
 ## Bug observé (IMPORTANT)
 Avant d'exécuter `tsock_text`, assurez-vous de ne pas avoir exécuté `tsock_video` sur votre machine auparavant, nous avons observé que ceci faisait bugger
