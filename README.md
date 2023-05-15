@@ -39,7 +39,7 @@ On aurait pu, pour aller plus loin, associer à chaque socket une liste de numé
 ### Paramètres de la fiabilité partielle
 Pour implanter la fiabilité partielle, nous avons repris notre solution implémentant la fiabilité totale, et nous avons ajouté les éléments suivants :
 
-Chaque socket possède un buffer circulaire d'une taille prédéfinie N. C'est simplement une liste qui peut contenir un certain nombre N d'entiers (dans notre cas 0 ou 1). Lorsqu'elle cette liste est pleine, elle écrase les premiers entiers avec les nouvelles valeurs qu'on y insère. Elle sert à modéliser l'état de réception par le destinataire des N derniers packets. 
+Chaque socket possède un buffer circulaire d'une taille prédéfinie N. C'est simplement une liste qui peut contenir un certain nombre N d'entiers (dans notre cas 0 ou 1). Lorsque cette liste est pleine, elle écrase les premiers entiers avec les nouvelles valeurs qu'on y insère. Elle sert à modéliser l'état de réception par le destinataire des N derniers packets. 
 Lorsque le client reçoit un acquittement, il ajoute un 1 au buffer circulaire associe à son socket et incrémente le numéro de séquence.
 Le cas échéant, il calcule la proportion de zéro dans ce buffer, et si elle est inférieure au pourcentage de pertes tolérable, il ajoute un autre 0 au buffer, et retourne au client la taille envoyée.
 Seulement, cette fois, il n'incrémente pas le numéro de séquence local.
