@@ -40,18 +40,19 @@ On aurait pu, pour aller plus loin, associer à chaque socket une liste de numé
 Pour implanter la fiabilité partielle, nous avons repris notre solution implémentant la fiabilité totale, et nous avons ajouté les éléments suivants :
 
 Chaque socket possède un buffer circulaire d'une taille prédéfinie N. C'est simplement une liste qui peut contenir un certain nombre N d'entiers (dans notre cas 0 ou 1). Lorsque cette liste est pleine, elle écrase les premiers entiers avec les nouvelles valeurs qu'on y insère. Elle sert à modéliser l'état de réception par le destinataire des N derniers packets. 
-Lorsque le client reçoit un acquittement, il ajoute un 1 au buffer circulaire associe à son socket et incrémente le numéro de séquence.
+
+Lors de l'échange de packets, lorsque le client reçoit un acquittement, il ajoute un 1 au buffer circulaire associé à son socket et incrémente son numéro de séquence.
 Le cas échéant, il calcule la proportion de zéro dans ce buffer, et si elle est inférieure au pourcentage de pertes tolérable, il ajoute un autre 0 au buffer, et retourne au client la taille envoyée.
 Seulement, cette fois, il n'incrémente pas le numéro de séquence local.
 Si, en revanche, la proportion de perte enregistrée est au-dessus de la valeur tolérable, il renvoie le packet jusqu'à l'arrivée de son acquittement. 
 
 Dans l'implantation de cette fiabilité partielle, nous avons jugé que seul celui qui envoie les packets (ici la source) est en position de contrôler cette fonctionnalité. C'est-à-dire, c'est lui qui maintient le buffer circulaire, et vérifie le respect du seuil de pertes. De ce fait, nous n'avons pas mis en place de mécanisme de négociation à proprement parler.
-Cette approche nous a paru cohérente, elle donne le pouvoir au serveur de contrôler la qualité de service, et permettrait d'éviter des abus où le client voudrait contrôler la tolérance aux pertes et surchargerait le serveur avec des retransmissions.
+Cette approche nous a paru cohérente, elle donne le pouvoir au serveur de contrôler la qualité de service, et permettrait d'éviter des abus où le client voudrait contrôler la tolérance aux pertes et surchargerait ainsi le serveur avec des retransmissions.
  
 ### La réalisation des IP_recv
 Si vous vous penchez sur notre code source, vous verrez que l'on a fait usage de la création de threads supplémentaires alors que nous ne sommes pas supposément allés jusqu'à la v4.2.
 La raison de ceci est que nous avons rencontré des bugs assez troublant concernant les IP_recv.  Ces derniers adoptent un comportement différent d'une exécution à l'autre, parfois devenant bloquant, et parfois n'étant pas capable de recevoir de packet même s'ils en furent capables à l'exécution précédente.
 Nous avons donc décidé de les traiter comme une source de perte en tant que tel, et nous les exécutons toujours dans un thread en parallèle côté puits. Côté source, étant donné que le `process_received_pdu` est lancé dans un thread à part, cela n'a pas été nécessaire.
-Afin de les synchroniser avec le thread principal, nous avons simplement profité du timer de réception. En l'occurrence, le timer d'attente des acquittements est lancé après la création du thread, le thread place ce qu'il reçoit dans une variable partagée, puis est détruit à l'épuisement du timer.
+Afin de les synchroniser avec le thread principal, nous avons simplement profité du timer de réception. En l'occurrence, le timer d'attente des acquittements est lancé après la création du thread, le thread place ce qu'il reçoit dans une variable partagée, puis il est détruit à l'épuisement du timer.
 Cela signifie en revanche que chaque traitement de packet reçu côté source doit attendre la fin du timer. Ce qui est une limite de notre solution.
 
