@@ -33,7 +33,7 @@ notre application. La seule solution que l'on a trouvée est de simplement reboo
 Avant de discuter les choix associés à l'implémentation de la fiabilité partielle, il faut d'abord expliquer ceux associés à la fiabilité totale. Nous avons décidé d'associer à chaque socket deux numéros de séquence distincts. Un numéro de séquence local et un numéro de séquence distant. 
 - Lorsqu'une application envoie un packet, elle place dans son en-tête le numéro de **séquence local** associe au socket. Ensuite seulement lorsqu'elle reçoit l'acquittement de ce dernier, elle incrémente ce numéro de séquence local.
 - D'autre part, quand une application utilisant le protocole mictcp, entre en connexion avec une application distante. La première essaye de maintenir dans son numéro de séquence distant la valeur du numéro de séquence local de la seconde. Pour ce faire, elle l'incrémente à chaque réception d'un packet possédant un numéro de séquence différent.
-Une des conséquences de notre choix est que chaque application est limitée à une seule connexion par socket, une même source, ne peut pas recevoir de packets de deux sources d'adresses différentes.
+Une des conséquences de notre choix est que chaque application est limitée à une seule connexion par socket. Une même source, ne peut pas recevoir de packets de deux sources d'adresses différentes.
 On aurait pu, pour aller plus loin, associer à chaque socket une liste de numéros de séquence distants.
 
 ### Paramètres de la fiabilité partielle
