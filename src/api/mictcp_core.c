@@ -166,7 +166,7 @@ int IP_recv(mic_tcp_pdu* pk, mic_tcp_sock_addr* addr, unsigned long timeout)
     /* Free the reception buffer */
     free(buffer);
 
-	printf("debug : %d\n",__LINE__);	
+	//printf("debug : %d\n",__LINE__);	
     return result;
 }
 
@@ -310,9 +310,9 @@ void* listening(void* arg)
     while(1)
     {   
         pdu_tmp.payload.size = payload_size;
-        printf("je vais recv\n");
+        //printf("je vais recv\n");
         recv_size = IP_recv(&pdu_tmp, &remote, 0);
-        printf("j'ai recv\n");
+        //printf("j'ai recv\n");
 
         if(recv_size != -1)
         {

@@ -2,7 +2,7 @@
 
 read -p "Donnez la version que vous desirez: " version_number
 
-read -p "Donnez le pourcentage de perte que vous voulez tolérer (marche qu'à partir de la v3): " loss_acceptability_number
+read -p "Donnez le pourcentage de perte que vous voulez tolérer (fonctionne à partir de la v3): " loss_acceptability_number
 
 file_path="./src/mictcp.c"
 
