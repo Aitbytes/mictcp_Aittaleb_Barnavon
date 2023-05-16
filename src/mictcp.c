@@ -43,7 +43,7 @@ pthread_t envoi_fin_ack_tid;
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t end_accept_cond = PTHREAD_COND_INITIALIZER;
 char debug=0; // 1 pour voir affichages de debug, 0 pour les cacher
-char version=3; // numéro de version (1,2,3,4)
+char version=4; // numéro de version (1,2,3,4)
 
 //================================== SIGNATURES DES FONCTIONS PRIVEES =============================
 
