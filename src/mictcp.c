@@ -39,10 +39,11 @@ static int socket_desc = 0; // fd du socket incrémenté à chaque nouveau socke
 static enhanced_socket tab_sockets[NBR_SOCKETS]; 
 int timeout = TIMEOUT_DEFAUT;
 pthread_t envoi_syn_ack_tid;
+pthread_t envoi_fin_ack_tid;
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t end_accept_cond = PTHREAD_COND_INITIALIZER;
 char debug=0; // 1 pour voir affichages de debug, 0 pour les cacher
-char version=4; // numéro de version (1,2,3,4)
+char version=1; // numéro de version (1,2,3,4)
 
 //================================== SIGNATURES DES FONCTIONS PRIVEES =============================
 
@@ -59,6 +60,7 @@ int accept_loss(int socket);
 void set_mic_tcp_pdu(mic_tcp_pdu* pdu, unsigned short source_port, unsigned short dest_port, unsigned int seq_num, unsigned int ack_num, unsigned char syn, unsigned char ack, unsigned char fin, char* data, int size);
 void process_syn_pdu(mic_tcp_pdu pdu,mic_tcp_sock_addr addr, int mic_sock);
 void * envoi_syn_ack(void * arg);
+void * envoi_fin_ack(void * arg);
 //================================== FONCTIONS DE MICTCP =============================
 
 
@@ -430,6 +432,40 @@ void process_syn_pdu(mic_tcp_pdu pdu,mic_tcp_sock_addr addr, int mic_sock){
 
 }
 
+void process_fin_pdu(mic_tcp_pdu pdu,mic_tcp_sock_addr addr, int mic_sock){
+	printf("[MIC-TCP] Appel de la fonction: ");
+	printf(__FUNCTION__);
+	printf("\n");
+
+	tab_sockets[mic_sock].socket.state = CLOSING;
+	mic_tcp_pdu pdu_r;
+
+	set_mic_tcp_pdu(&pdu_r, 
+					tab_sockets[mic_sock].socket.addr.port,
+					tab_sockets[mic_sock].dist_addr.port,
+					tab_sockets[mic_sock].NoSeqLoc, 
+					tab_sockets[mic_sock].NoSeqDist,
+					 0,1,1,NULL,0
+	);
+			
+	display_mic_tcp_pdu(pdu_r, "Construction du Pdu FIN ACK : \n");
+	display_mic_tcp_sock_addr(tab_sockets[mic_sock].dist_addr, "Envoi du PDU FIN ACK à l'adresse:");
+
+	IP_send(pdu_r, addr);
+
+
+
+	arg_thread* args = malloc(sizeof(arg_thread));
+	args->socket=mic_sock;
+	args->pdu_r=pdu_r;
+
+	printf(debug?"avant creation thread TEFA\n":"");
+	pthread_create(&envoi_fin_ack_tid, NULL,envoi_fin_ack,(void *)args);
+	printf(debug?"aprés creation thread TEFA\n":"");
+
+
+}
+
 /*
  * Permet de traiter un PDU MIC-TCP reçu (mise à jour des numéros de séquence
  * et d'acquittement, etc.) puis d'insérer les données utiles du PDU dans
@@ -467,6 +503,15 @@ void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_sock_addr addr) //addr = adre
 	{	
 		printf(debug?"Doublon PDU SYN recu\n":"");
 	}
+	if (pdu.header.fin == 1 && tab_sockets[mic_sock].socket.state == ESTABLISHED) // si PDU FIN
+	{	
+		printf(debug?"PDU FIN recu\n":"");
+		process_fin_pdu(pdu,addr, mic_sock);
+	}
+	else if (pdu.header.syn == 1 && tab_sockets[mic_sock].socket.state == CLOSING) // si Doublon PDU FIN
+	{	
+		printf(debug?"Doublon PDU FIN recu\n":"");
+	}
 
 	else if (pdu.header.ack == 1 && tab_sockets[mic_sock].socket.state == SYN_RECEIVED)
 	{ // Si ACK de connection reçu
@@ -479,7 +524,16 @@ void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_sock_addr addr) //addr = adre
 
 		printf("[MIC-TCP] Connexion établie\n");
 	}
-	
+	else if (pdu.header.ack == 1 && tab_sockets[mic_sock].socket.state == CLOSING)
+	{ // Si ACK de fin de connection reçu
+
+		printf(debug?"PDU ACK recu \n":"");
+		tab_sockets[mic_sock].socket.state = CLOSED;
+		
+
+		printf("[MIC-TCP] Connexion fermée\n");
+		exit(1); // on quitte l'application
+	}
 	else if(pdu.header.ack == 0 && pdu.header.seq_num == tab_sockets[mic_sock].NoSeqDist && tab_sockets[mic_sock].socket.state == ESTABLISHED)
 	{ // Si PDU de DATA 
 		printf(debug?"PDU data recu \n":"");
@@ -542,10 +596,92 @@ int mic_tcp_close(int socket)
 	printf(__FUNCTION__);
 	printf("\n");
 
+	if (version<4){ // pas de phase de fermeture de connexion
+		tab_sockets[socket].socket.state = CLOSED;
+		display_enhanced_socket(tab_sockets[socket], "État du socket aprés fermeture de la connection :");
+		return 0;
+	}
+
 	if (valid_socket(socket) && tab_sockets[socket].socket.state == ESTABLISHED)
 	{
-		tab_sockets[socket].socket.state = CLOSED;
-		tab_sockets[socket].socket.fd = -1;
+		tab_sockets[socket].socket.state = CLOSING;
+		mic_tcp_pdu pdu; // pdu fin
+		set_mic_tcp_pdu(
+		&pdu,
+		tab_sockets[socket].socket.addr.port,
+		tab_sockets[socket].dist_addr.port,
+		tab_sockets[socket].NoSeqLoc,
+		-1,
+		0,0,1,
+		NULL,0
+	);
+
+    display_mic_tcp_pdu(pdu, "creation du pdu FIN:");
+
+	display_mic_tcp_sock_addr(tab_sockets[socket].dist_addr, "envoi du pdu FIN vers l'adresse :");
+
+	
+	IP_send(pdu, tab_sockets[socket].dist_addr);
+    display_enhanced_socket(tab_sockets[socket], "état du socket en attente du syn ack :");
+
+	pthread_t attente_ack_tid;
+	arg_thread* args = malloc(sizeof(arg_thread));
+
+	while (1){
+
+		args->recpt=-1;
+		printf(debug?"avant creation thread TAA\n":"");
+		pthread_create(&attente_ack_tid, NULL,attente_ack,(void *)args);
+		printf(debug?"aprés creation thread TAA\n":"");
+
+		usleep(timeout);
+		if (pthread_cancel(attente_ack_tid)) printf(debug?"destruction du TAA\n":"");
+
+		if (args->recpt == -1){
+			if (tab_sockets[socket].socket.state == CLOSED){
+				break;	
+			}
+			IP_send(pdu, tab_sockets[socket].dist_addr);
+			printf(debug?"ACK pas encore reçu, envoi d'un doublon du FIN\n":"");
+			continue;
+		}
+		display_mic_tcp_pdu(args->pdu_r,"pdu reçu :");
+
+		if (args->pdu_r.header.ack == 1 && args->pdu_r.header.fin == 1 ){
+			//printf("Bon PDU FIN ACK recu \n");
+
+			set_mic_tcp_pdu(
+			&pdu,
+			tab_sockets[socket].socket.addr.port,
+			tab_sockets[socket].dist_addr.port,
+			-1,
+			args->pdu_r.header.seq_num,
+			0,1,0,
+			NULL,0
+			);
+	
+		    display_mic_tcp_pdu(pdu, "creation du pdu ACK:");
+
+			display_mic_tcp_sock_addr(tab_sockets[socket].dist_addr, "envoi du pdu ACK vers l'adresse :");
+
+			IP_send(pdu, tab_sockets[socket].dist_addr);
+
+			tab_sockets[socket].socket.state = CLOSED;
+			
+
+			break;
+			
+		}
+		else {
+			continue;
+		}
+		
+       
+	}
+	display_enhanced_socket(tab_sockets[socket], "État du socket aprés la fermeture de la connexion :");
+	printf("[MIC-TCP] Connexion fermée\n");
+	tab_sockets[socket].socket.fd = -1; // suppression du socket
+	return 0;
 	}
 	return -1;
 }
@@ -686,6 +822,28 @@ void * envoi_syn_ack(void * arg) {
 			else if (tab_sockets[args->socket].socket.state == ESTABLISHED)
 			{
 				printf(debug?"!Destruction du TESA!":"");
+				pthread_exit(NULL);
+			}
+			usleep(timeout);
+		}
+}
+
+void * envoi_fin_ack(void * arg) {
+	printf(debug?"début du TEFA : Thread d'Envoi de FIN ACK'\n":"");
+	arg_thread* args = (arg_thread*)arg;
+	while (1)
+		{
+			if (tab_sockets[args->socket].socket.state == CLOSING)
+			{
+
+				display_mic_tcp_pdu(args->pdu_r, "renvoi du pdu fin ack");
+				display_mic_tcp_sock_addr(tab_sockets[args->socket].dist_addr,"a l'adresse");
+				IP_send(args->pdu_r, tab_sockets[args->socket].dist_addr);
+				printf(debug?"TEFA: je renvoie le FIN ack\n":"");
+			}
+			else if (tab_sockets[args->socket].socket.state == CLOSED)
+			{
+				printf("!Destruction du TEFA!");
 				pthread_exit(NULL);
 			}
 			usleep(timeout);
